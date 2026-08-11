@@ -112,7 +112,7 @@ class TableModel(QAbstractTableModel):
 
         if not index.isValid():
             return None
-        if role != Qt.DisplayRole:
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
         return str(self.arraydata[index.row()][index.column()])
 
@@ -156,7 +156,7 @@ class TableModel(QAbstractTableModel):
         :rtype: str
         """
 
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.header[col]
         return None
 
@@ -170,7 +170,7 @@ class TableModel(QAbstractTableModel):
         :rtype: PyQt4.QtCore.ItemFlags
         """
 
-        return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 
 
 class ExtendedCombobox(QComboBox):
@@ -189,14 +189,14 @@ class ExtendedCombobox(QComboBox):
 
         super().__init__(parent)
 
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setEditable(True)
         self.completer = QCompleter(self)
 
         # always show all completions
-        self.completer.setCompletionMode(QCompleter.UnfilteredPopupCompletion)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
         self.p_filter_model = QSortFilterProxyModel(self)
-        self.p_filter_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.p_filter_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.completer.setPopup(self.view())
         self.setCompleter(self.completer)
         self.lineEdit().textEdited.connect(self.p_filter_model.setFilterFixedString)

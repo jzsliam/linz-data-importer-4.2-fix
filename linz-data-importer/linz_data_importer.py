@@ -25,7 +25,6 @@ import urllib.request
 from socket import timeout
 from urllib.error import URLError
 
-from PyQt5.QtCore import QItemSelectionModel
 from qgis.core import (  # pylint:disable=import-error
     Qgis,
     QgsCoordinateReferenceSystem,
@@ -35,6 +34,7 @@ from qgis.core import (  # pylint:disable=import-error
 )
 from qgis.PyQt.QtCore import (  # pylint:disable=import-error
     QCoreApplication,
+    QItemSelectionModel,
     QSettings,
     QSortFilterProxyModel,
     Qt,
@@ -88,13 +88,13 @@ class CustomSortFilterProxyModel(QSortFilterProxyModel):
         index3 = self.sourceModel().index(sourceRow, 4, sourceParent)  # LAYER NAME
         index4 = self.sourceModel().index(sourceRow, 0, sourceParent)  # DOMAIN
 
-        return self.sourceModel().data(index2, Qt.DisplayRole) in self.data_type and (
-            self.filterRegExp().indexIn(self.sourceModel().data(index3, Qt.DisplayRole))
-            >= 0
-            or self.filterRegExp().indexIn(
-                self.sourceModel().data(index4, Qt.DisplayRole)
-            )
-            >= 0
+        if self.sourceModel().data(index2, Qt.ItemDataRole.DisplayRole) not in self.data_type:
+            return False
+
+        expression = self.filterRegularExpression()
+        return any(
+            expression.match(self.sourceModel().data(index, Qt.ItemDataRole.DisplayRole)).hasMatch()
+            for index in (index3, index4)
         )
 
 
@@ -518,16 +518,16 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
         """
 
         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeToContents
+            0, QHeaderView.ResizeMode.ResizeToContents
         )
         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
+            1, QHeaderView.ResizeMode.ResizeToContents
         )
         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeToContents
+            2, QHeaderView.ResizeMode.ResizeToContents
         )
         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeToContents
+            3, QHeaderView.ResizeMode.ResizeToContents
         )
 
     def load_all_services(self, update_cache=False):
@@ -587,19 +587,19 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
             if item.text() == "ALL":
                 self.dlg.uStackedWidget.setCurrentIndex(0)
                 self.curr_list_wid_index = self.dlg.uListOptions.findItems(
-                    item.text(), Qt.MatchExactly
+                    item.text(), Qt.MatchFlag.MatchExactly
                 )[0]
                 self.proxy_model.set_service_type(("WMTS", "WFS"))
             elif item.text() == "WFS":
                 self.proxy_model.set_service_type((item.text()))
                 self.curr_list_wid_index = self.dlg.uListOptions.findItems(
-                    item.text(), Qt.MatchExactly
+                    item.text(), Qt.MatchFlag.MatchExactly
                 )[0]
                 self.dlg.uStackedWidget.setCurrentIndex(0)
             elif item.text() == "WMTS":
                 self.proxy_model.set_service_type((item.text()))
                 self.curr_list_wid_index = self.dlg.uListOptions.findItems(
-                    item.text(), Qt.MatchExactly
+                    item.text(), Qt.MatchFlag.MatchExactly
                 )[0]
                 self.dlg.uStackedWidget.setCurrentIndex(0)
             elif item.text() == "Settings":
@@ -714,7 +714,7 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
         """
 
         filter_text = self.dlg.uTextFilter.text()
-        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.proxy_model.setFilterKeyColumn(2)
         self.proxy_model.setFilterFixedString(filter_text)
 
@@ -760,9 +760,7 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
         is imported and no others have been already.
         """
 
-        crs = QgsCoordinateReferenceSystem(
-            self.selected_crs_int, QgsCoordinateReferenceSystem.EpsgCrsId
-        )
+        crs = QgsCoordinateReferenceSystem.fromEpsgId(self.selected_crs_int)
         self.canvas.setDestinationCrs(crs)
         self.iface.messageBar().pushMessage(
             "Info",

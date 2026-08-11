@@ -1,0 +1,181 @@
+diff --git a/linz-data-importer/gui/service_dialog.py b/linz-data-importer/gui/service_dialog.py
+index 23c25f3..2d3a03e 100644
+--- a/linz-data-importer/gui/service_dialog.py
++++ b/linz-data-importer/gui/service_dialog.py
+@@ -18,7 +18,7 @@
+ 
+ import os
+ 
+-from PyQt5 import QtWidgets, uic
++from qgis.PyQt import QtWidgets, uic  # pylint:disable=import-error
+ 
+ FORM_CLASS, _ = uic.loadUiType(
+     os.path.join(os.path.dirname(__file__), "service_dialog_base.ui")
+diff --git a/linz-data-importer/linz_data_importer.py b/linz-data-importer/linz_data_importer.py
+index 5b4e9e0..f208934 100644
+--- a/linz-data-importer/linz_data_importer.py
++++ b/linz-data-importer/linz_data_importer.py
+@@ -25,7 +25,6 @@ import urllib.request
+ from socket import timeout
+ from urllib.error import URLError
+ 
+-from PyQt5.QtCore import QItemSelectionModel
+ from qgis.core import (  # pylint:disable=import-error
+     Qgis,
+     QgsCoordinateReferenceSystem,
+@@ -35,6 +34,7 @@ from qgis.core import (  # pylint:disable=import-error
+ )
+ from qgis.PyQt.QtCore import (  # pylint:disable=import-error
+     QCoreApplication,
++    QItemSelectionModel,
+     QSettings,
+     QSortFilterProxyModel,
+     Qt,
+@@ -88,13 +88,13 @@ class CustomSortFilterProxyModel(QSortFilterProxyModel):
+         index3 = self.sourceModel().index(sourceRow, 4, sourceParent)  # LAYER NAME
+         index4 = self.sourceModel().index(sourceRow, 0, sourceParent)  # DOMAIN
+ 
+-        return self.sourceModel().data(index2, Qt.DisplayRole) in self.data_type and (
+-            self.filterRegExp().indexIn(self.sourceModel().data(index3, Qt.DisplayRole))
+-            >= 0
+-            or self.filterRegExp().indexIn(
+-                self.sourceModel().data(index4, Qt.DisplayRole)
+-            )
+-            >= 0
++        if self.sourceModel().data(index2, Qt.ItemDataRole.DisplayRole) not in self.data_type:
++            return False
++
++        expression = self.filterRegularExpression()
++        return any(
++            expression.match(self.sourceModel().data(index, Qt.ItemDataRole.DisplayRole)).hasMatch()
++            for index in (index3, index4)
+         )
+ 
+ 
+@@ -518,16 +518,16 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
+         """
+ 
+         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
+-            0, QHeaderView.ResizeToContents
++            0, QHeaderView.ResizeMode.ResizeToContents
+         )
+         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
+-            1, QHeaderView.ResizeToContents
++            1, QHeaderView.ResizeMode.ResizeToContents
+         )
+         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
+-            2, QHeaderView.ResizeToContents
++            2, QHeaderView.ResizeMode.ResizeToContents
+         )
+         self.dlg.uTableView.horizontalHeader().setSectionResizeMode(
+-            3, QHeaderView.ResizeToContents
++            3, QHeaderView.ResizeMode.ResizeToContents
+         )
+ 
+     def load_all_services(self, update_cache=False):
+@@ -587,19 +587,19 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
+             if item.text() == "ALL":
+                 self.dlg.uStackedWidget.setCurrentIndex(0)
+                 self.curr_list_wid_index = self.dlg.uListOptions.findItems(
+-                    item.text(), Qt.MatchExactly
++                    item.text(), Qt.MatchFlag.MatchExactly
+                 )[0]
+                 self.proxy_model.set_service_type(("WMTS", "WFS"))
+             elif item.text() == "WFS":
+                 self.proxy_model.set_service_type((item.text()))
+                 self.curr_list_wid_index = self.dlg.uListOptions.findItems(
+-                    item.text(), Qt.MatchExactly
++                    item.text(), Qt.MatchFlag.MatchExactly
+                 )[0]
+                 self.dlg.uStackedWidget.setCurrentIndex(0)
+             elif item.text() == "WMTS":
+                 self.proxy_model.set_service_type((item.text()))
+                 self.curr_list_wid_index = self.dlg.uListOptions.findItems(
+-                    item.text(), Qt.MatchExactly
++                    item.text(), Qt.MatchFlag.MatchExactly
+                 )[0]
+                 self.dlg.uStackedWidget.setCurrentIndex(0)
+             elif item.text() == "Settings":
+@@ -714,7 +714,7 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
+         """
+ 
+         filter_text = self.dlg.uTextFilter.text()
+-        self.proxy_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
++        self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+         self.proxy_model.setFilterKeyColumn(2)
+         self.proxy_model.setFilterFixedString(filter_text)
+ 
+@@ -760,9 +760,7 @@ class LinzDataImporter:  # pylint: disable=too-many-instance-attributes,too-many
+         is imported and no others have been already.
+         """
+ 
+-        crs = QgsCoordinateReferenceSystem(
+-            self.selected_crs_int, QgsCoordinateReferenceSystem.EpsgCrsId
+-        )
++        crs = QgsCoordinateReferenceSystem.fromEpsgId(self.selected_crs_int)
+         self.canvas.setDestinationCrs(crs)
+         self.iface.messageBar().pushMessage(
+             "Info",
+diff --git a/linz-data-importer/metadata.txt b/linz-data-importer/metadata.txt
+index 4f4bca3..646f1ae 100644
+--- a/linz-data-importer/metadata.txt
++++ b/linz-data-importer/metadata.txt
+@@ -3,7 +3,8 @@
+ [general]
+ name=LINZ Data Importer
+ qgisMinimumVersion=3.16.0
+-qgisMaximumVersion=3.99.0
++qgisMaximumVersion=4.99.0
++supportsQt6=True
+ description=Import LDS OGC Datasets into QGIS
+ version=2.3.1
+ author=Toitū Te Whenua Land Information New Zealand
+diff --git a/linz-data-importer/tablemodel.py b/linz-data-importer/tablemodel.py
+index d911186..0c9fdae 100644
+--- a/linz-data-importer/tablemodel.py
++++ b/linz-data-importer/tablemodel.py
+@@ -112,7 +112,7 @@ class TableModel(QAbstractTableModel):
+ 
+         if not index.isValid():
+             return None
+-        if role != Qt.DisplayRole:
++        if role != Qt.ItemDataRole.DisplayRole:
+             return None
+         return str(self.arraydata[index.row()][index.column()])
+ 
+@@ -156,7 +156,7 @@ class TableModel(QAbstractTableModel):
+         :rtype: str
+         """
+ 
+-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
++        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+             return self.header[col]
+         return None
+ 
+@@ -170,7 +170,7 @@ class TableModel(QAbstractTableModel):
+         :rtype: PyQt4.QtCore.ItemFlags
+         """
+ 
+-        return Qt.ItemIsEnabled | Qt.ItemIsSelectable
++        return Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
+ 
+ 
+ class ExtendedCombobox(QComboBox):
+@@ -189,14 +189,14 @@ class ExtendedCombobox(QComboBox):
+ 
+         super().__init__(parent)
+ 
+-        self.setFocusPolicy(Qt.StrongFocus)
++        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+         self.setEditable(True)
+         self.completer = QCompleter(self)
+ 
+         # always show all completions
+-        self.completer.setCompletionMode(QCompleter.UnfilteredPopupCompletion)
++        self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
+         self.p_filter_model = QSortFilterProxyModel(self)
+-        self.p_filter_model.setFilterCaseSensitivity(Qt.CaseInsensitive)
++        self.p_filter_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+         self.completer.setPopup(self.view())
+         self.setCompleter(self.completer)
+         self.lineEdit().textEdited.connect(self.p_filter_model.setFilterFixedString)
